@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>date planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1c1c1e;        /* main background (soft dark) */
+    --bg2: #2c2c2e;       /* cards/columns */
+    --border: rgba(255,255,255,0.1);
+    --border2: rgba(255,255,255,0.22);
+    --text: #d6d6d6;      /* soft grey text */
+  }
+
+  body {
+    font-family: Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px;
+  }
+
+  h1 {
+    font-size: 22px;
+    margin-bottom: 16px;
+  }
+
+  #hours-wrap {
+    margin-bottom: 16px;
+  }
+
+  #hours-label {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+
+  #hours-input,
+  #idea-input {
+    border: 1px solid var(--border2);
+    background: var(--bg2);
+    color: var(--text);
+    padding: 8px 10px;
+    font-size: 14px;
+    width: 100%;
+    max-width: 250px;
+  }
+
+  #idea-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  #idea-input {
+    flex: 1;
+    max-width: none;
+  }
+
+  #add-btn {
+    border: 1px solid var(--border2);
+    background: #3a3a3c;
+    color: var(--text);
+    padding: 8px 14px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  #columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .col {
+    border: 1px solid var(--border);
+    padding: 10px;
+    min-height: 240px;
+    background: var(--bg2);
+  }
+
+  .col.drag-over {
+    background: #3a3a3c;
+  }
+
+  .col-label {
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+
+  .col-title {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .col-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 120px;
+  }
+
+  .idea-chip {
+    border: 1px solid var(--border2);
+    background: #3a3a3c;
+    padding: 6px 8px;
+    font-size: 13px;
+    cursor: grab;
+    position: relative;
+    color: var(--text);
+  }
+
+  .idea-chip.dragging {
+    opacity: 0.5;
+  }
+
+  .idea-chip .del-x {
+    display: none;
+    position: absolute;
+    right: 6px;
+    top: 4px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .idea-chip:hover .del-x {
+    display: block;
+  }
+
+  @media (max-width: 700px) {
+    #columns {
+      grid-template-columns: 1fr;
+    }
+
+    #idea-bar {
+      flex-direction: column;
+    }
+
+    #add-btn {
+      width: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+
+<h1>date planner</h1>
+
+<div id="hours-wrap">
+  <div id="hours-label">hours</div>
+  <input id="hours-input" type="number" min="0" step="0.5"  />
+</div>
+
+<div id="idea-bar">
+  <input id="idea-input" type="text" maxlength="100" />
+  <button id="add-btn">+ add</button>
+</div>
+
+<div id="columns">
+  <div class="col" data-id="ideas">
+    <div class="col-label">column 01</div>
+    <div class="col-title">date ideas</div>
+    <div class="col-body" id="ideas-list"></div>
+  </div>
+
+  <div class="col" data-id="combinations">
+    <div class="col-label">column 02</div>
+    <div class="col-title">combinations</div>
+    <div class="col-body" id="combinations-list">
+      
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'date_planner_v1';
+let draggedChip = null;
+
+function save() {
+  const state = {
+    hours: document.getElementById('hours-input').value,
+    ideas: [],
+    combinations: []
+  };
+
+  document.querySelectorAll('#ideas-list .idea-chip').forEach(chip => {
+    state.ideas.push(chip.dataset.idea);
+  });
+
+  document.querySelectorAll('#combinations-list .idea-chip').forEach(chip => {
+    state.combinations.push(chip.dataset.idea);
+  });
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function createChip(text) {
+  const chip = document.createElement('div');
+  chip.className = 'idea-chip';
+  chip.dataset.idea = text;
+  chip.setAttribute('draggable', true);
+
+  const label = document.createElement('span');
+  label.textContent = text;
+  chip.appendChild(label);
+
+  const x = document.createElement('div');
+  x.className = 'del-x';
+  x.textContent = 'x';
+  x.addEventListener('click', e => {
+    e.stopPropagation();
+    chip.remove();
+    
+    save();
+  });
+  chip.appendChild(x);
+
+  chip.addEventListener('dragstart', e => {
+    draggedChip = chip;
+    setTimeout(() => chip.classList.add('dragging'), 0);
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  chip.addEventListener('dragend', () => {
+    chip.classList.remove('dragging');
+    draggedChip = null;
+  });
+
+  return chip;
+}
+
+
+
+function setupDropZone(el) {
+  el.addEventListener('dragover', e => {
+    e.preventDefault();
+    el.classList.add('drag-over');
+  });
+
+  el.addEventListener('dragleave', () => {
+    el.classList.remove('drag-over');
+  });
+
+  el.addEventListener('drop', e => {
+    e.preventDefault();
+    el.classList.remove('drag-over');
+    if (!draggedChip) return;
+    el.appendChild(draggedChip);
+
+    save();
+  });
+}
+
+function addIdea(text) {
+  if (!text.trim()) return;
+  document.getElementById('ideas-list').appendChild(createChip(text.trim()));
+  save();
+}
+
+document.getElementById('add-btn').addEventListener('click', () => {
+  const inp = document.getElementById('idea-input');
+  addIdea(inp.value);
+  inp.value = '';
+  inp.focus();
+});
+
+document.getElementById('idea-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    addIdea(e.target.value);
+    e.target.value = '';
+  }
+});
+
+document.getElementById('hours-input').addEventListener('input', save);
+
+setupDropZone(document.getElementById('ideas-list'));
+setupDropZone(document.getElementById('combinations-list'));
+
+try {
+  const state = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  if (state) {
+    document.getElementById('hours-input').value = state.hours || '';
+
+    (state.ideas || []).forEach(text => {
+      document.getElementById('ideas-list').appendChild(createChip(text));
+    });
+
+    (state.combinations || []).forEach(text => {
+      document.getElementById('combinations-list').appendChild(createChip(text));
+    });
+
+    
+  }
+} catch(e) {}
+</script>
+
+</body>
+</html>
